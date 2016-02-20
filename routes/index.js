@@ -304,7 +304,7 @@ router.get(config.routes.state, function (req, res) {
 
 // Start
 router.post(config.routes.start, function (req, res) {
-  
+
   // Response data
   var data = {
     name: config.snake.name,
