@@ -10,7 +10,8 @@ var snakeId = 'dc4721f2-82da-4170-b2b4-1792bdf1ba71',
     gold: 3,
     me: 4,
     other: 5,
-    searched: 6
+    otherHead: 6,
+    searched: 7
   },
   // TODO set offsets as attribute of board
   offsets = [[0, 1], [0, -1], [1, 0], [-1, 0]];
@@ -21,16 +22,24 @@ function generateBoard(reqData) {
   board.width = reqData.width;
   board.height = reqData.height;
 
-  _.each(reqData.food, _.partial(setBoardTypeAt, board, type.food));
-  _.each(reqData.walls, _.partial(setBoardTypeAt, board, type.wall));
-  _.each(reqData.gold, _.partial(setBoardTypeAt, board, type.gold));
+  _.each(reqData.food, setBoardTypeAt(board, type.food));
+  _.each(reqData.walls, setBoardTypeAt(board, type.wall));
+  _.each(reqData.gold, setBoardTypeAt(board, type.gold));
 
   // can probably one line this one
   _.each(reqData.snakes, function(snake) {
     var isMe = snake.id === snakeId;
-    _.each(snake.coords, function(coord) {
-      setBoardTypeAt(board, isMe ? type.me : type.other, coord);
-    })
+
+    if (isMe) {
+      _(snake.coords)
+        .each(setBoardTypeAt(board, type.me));
+    } else {
+      setBoardTypeAt(board, type.otherHead, _.head(snake.coords));
+
+      _(snake.coords)
+        .tail()
+        .each(setBoardTypeAt(board, type.other))
+    }
   });
 
   return board;
@@ -72,19 +81,19 @@ function isInRange(lower, upper, value) {
   return lower <= value && value <= upper;
 }
 
-function isTraversableAt(board, p) {
+var isTraversableAt = _.curry(function(board, p) {
   var value = board[boardOffset(board, p[0], p[1])];
   return _.isUndefined(value) || value === type.food || value === type.gold;
-}
+});
 
-function isValidAt(board, p) {
+var isValidAt = _.curry(function(board, p) {
   return isInRange(0, board.width - 1, p[0]) && isInRange(0, board.height - 1, p[1]);
-}
+});
 
-function setBoardTypeAt(board, type, p) {
+var setBoardTypeAt = _.curry(function(board, type, p) {
   board[boardOffset(board, p[0], p[1])] = type;
   return board;
-}
+});
 
 var isTypeAt = _.curry(function(type, board, p) {
   return boardValue(board, p) === type
@@ -93,15 +102,16 @@ var isTypeAt = _.curry(function(type, board, p) {
 var isMeAt = isTypeAt(type.me),
   isWallAt = isTypeAt(type.wall),
   isFoodAt = isTypeAt(type.food),
-  isGoldAt = isTypeAt(type.gold);
+  isGoldAt = isTypeAt(type.gold),
+  isOtherHeadAt = isTypeAt(type.otherHead);
 
 var pointDistance = _.curry(function(p1, p2) {
   return Math.abs(p1[0] - p2[0]) + Math.abs(p1[1] - p2[1])
 });
 
-function addPoints(p1, p2) {
+var addPoints = _.curry(function(p1, p2) {
   return [p1[0] + p2[0], p1[1] + p2[1]];
-}
+});
 
 function subtractPoints(p1, p2) {
   return [p1[0] - p2[0], p1[1] - p2[1]];
@@ -109,33 +119,17 @@ function subtractPoints(p1, p2) {
 
 function findValidMoves(board, p) {
   return _(offsets)
-    .map(_.partial(addPoints, p))
-    .filter(_.partial(isTraversableAt, board))
-    .filter(_.partial(isValidAt, board))
+    .map(addPoints(p))
+    .filter(isTraversableAt(board))
+    .filter(isValidAt(board))
     .value();
 }
 
 function findPossibleMoves(board, p) {
   return _(offsets)
-    .map(_.partial(addPoints, p))
-    .filter(_.negate(_.partial(isMeAt, board)))
+    .map(addPoints(p))
+    .filter(_.negate(isMeAt(board)))
     .value();
-}
-
-function scoreMove (board, move) {
-
-}
-
-function findPathToFood(board, position, route) {
-  var validMoves = findValidMoves(board, position);
-
-  //console.log('visiting: ', position, ' validMoves: ', validMoves)
-
-  //console.log('here',t);
-  _.each(validMoves, function(move) {
-    setBoardTypeAt(board, type.searched, position);
-    findPathToFood(board, move);
-  });
 }
 
 function isAbove(dx, dy) { return dx === 0 && dy === -1; }
@@ -163,10 +157,6 @@ function moveDirection(head, target) {
   return direction;
 }
 
-function scorePosition() {
-
-}
-
 // WARNING: destroys board
 function accessibleItems(board, head) {
 
@@ -176,28 +166,37 @@ function accessibleItems(board, head) {
       walls: [],
       gold: [],
       empty: [],
-      move: head
+      otherHead: [],
+      move: head,
+      score: 0
     };
   }
 
-  function updatePData(board, pData, p) {
+  var updatePData = _.curry(function(board, pData, p) {
     var value = boardValue(board, p);
 
     if (value === type.food) pData.food.push(p);
     else if (value === type.wall) pData.walls.push(p);
     else if (value === type.gold) pData.gold.push(p);
+    else if (value === type.otherHead) pData.otherHead.push(p);
     else if (_.isUndefined(value)) pData.empty.push(p);
 
     return pData;
-  }
+  });
 
   function crawlTree(board, pData, position) {
 
-
     var possibleMoves = findPossibleMoves(board, position);
 
+    // yuck
     _(possibleMoves)
-      .filter(_.partial(isWallAt, board))
+      .filter(isWallAt(board))
+      .each(function(p) {
+        updatePData(board, pData, p);
+        setBoardTypeAt(board, type.searched, p);
+      });
+    _(possibleMoves)
+      .filter(isOtherHeadAt(board))
       .each(function(p) {
         updatePData(board, pData, p);
         setBoardTypeAt(board, type.searched, p);
@@ -206,10 +205,10 @@ function accessibleItems(board, head) {
 
     var validMoves = findValidMoves(board, position);
     // calculate stats on location
-    _.each(validMoves, _.partial(updatePData, board, pData));
+    _.each(validMoves, updatePData(board, pData));
 
     // mark location as searched
-    _.each(validMoves, _.partial(setBoardTypeAt, board, type.searched));
+    _.each(validMoves, setBoardTypeAt(board, type.searched));
 
     // recurse for any unvisited visitable neighbors
     _.each(validMoves, _.partial(crawlTree, board, pData));
@@ -217,15 +216,18 @@ function accessibleItems(board, head) {
 
   var stats = emptyPData();
   crawlTree(board, stats, head);
-  //console.log(stats);
-
-
 
   return stats;
 }
 
 function distanceToClosestFood(stats) {
   return _(stats.food)
+    .map(pointDistance(stats.move))
+    .min();
+}
+
+function distanceToClosestOtherHead(stats) {
+  return _(stats.otherHead)
     .map(pointDistance(stats.move))
     .min();
 }
@@ -259,6 +261,28 @@ var moveStats = _.curry(function(reqBody, move) {
   return stats;
 });
 
+var whenHungry = _.curry(function(board, stats) {
+  return -distanceToClosestFood(stats) + fearDeadEnds(stats) + fearOtherSnakeHeads(stats);
+});
+
+var whenGoldPresent = _.curry(function(board, stats) {
+  return -distanceToClosestGold(stats) + fearDeadEnds(stats) + fearOtherSnakeHeads(stats);
+});
+
+var generalMovement = _.curry(function(board, stats) {
+  return numberEmptySpaces(stats) + fearDeadEnds(stats) + fearOtherSnakeHeads(stats);
+});
+
+function fearDeadEnds(stats) {
+  return (stats.empty.length < 8) ? -1000 : 0;
+}
+
+function fearOtherSnakeHeads(stats) {
+  var distance = distanceToClosestOtherHead(stats),
+    radius = 3;
+
+  return (distance <= radius) ? -1000 * (radius - distance) : 0;
+}
 
 // Get the state of the snake
 router.get(config.routes.state, function (req, res) {
@@ -280,11 +304,6 @@ router.get(config.routes.state, function (req, res) {
 
 // Start
 router.post(config.routes.start, function (req, res) {
-  // Do something here to start the game
-  // Hint: do something with the incoming game_id? ;)
-  //console.log('req.body:', req.body);
-
-
   // Response data
   var data = {
     name: config.snake.name,
@@ -300,58 +319,36 @@ router.post(config.routes.start, function (req, res) {
 router.post(config.routes.move, function (req, res) {
   // Do something here to generate your move
   try {
-    //console.log('req.body:', req.body);
 
-    var //board = generateBoard(req.body),
-      snake = findMySnake(req.body),
+    var snake = findMySnake(req.body),
       head = _.head(snake.coords),
-      hungry = snake.health < 70;
+      hungry = snake.health < 70,
+      validMoves = findValidMoves(generateBoard(req.body), head),
+      board = generateBoard(req.body);
 
-    var validMoves = findValidMoves(generateBoard(req.body), head);
-    var board = generateBoard(req.body);
+    var makeMove;
 
 
-    var makeMove = _.sample(validMoves);
-
-    if (req.body.mode === 'classic') {
-      var stat = _(validMoves)
+    if (hungry) {
+      makeMove = _.get(_(validMoves)
         .map(moveStats(req.body))
-        .minBy(distanceToClosestFood);
-      if (stat) makeMove = stat.move;
+        .maxBy(whenHungry(board)), 'move');
+    } else if (_.get(req.body, 'gold.length') > 0) {
+      makeMove = _.get(_(validMoves)
+        .map(moveStats(req.body))
+        .maxBy(whenGoldPresent(board)), 'move');
     } else {
-
-      if (hungry) {
-        var stat = _(validMoves)
-          .map(moveStats(req.body))
-          .minBy(distanceToClosestFood);
-        if (stat) makeMove = stat.move;
-      } else if (req.body.gold.length > 0) {
-        var stat = _(validMoves)
-          .map(moveStats(req.body))
-          .minBy(distanceToClosestGold);
-        if (stat) makeMove = stat.move;
-      } else {
-        var stat = _(validMoves)
-          .map(moveStats(req.body))
-          .maxBy(numberEmptySpaces);
-        if (stat) makeMove = stat.move;
-      }
-
+      makeMove = _.get(_(validMoves)
+        .map(moveStats(req.body))
+        .maxBy(generalMovement(board)), 'move');
     }
 
 
-    //console.log(stat);
-    //printBoard(board);
-
-
-
-
+    makeMove = makeMove || _.sample(validMoves);
 
     console.log();
     console.log('health: ' + snake.health);
     console.log();
-
-
 
     var t = 'north';
 
@@ -360,7 +357,7 @@ router.post(config.routes.move, function (req, res) {
     // Response data
     var data = {
       move: t, // one of: ["north", "south", "west", "east"]
-      taunt: 'What?!' || config.snake.taunt.move
+      taunt: 'This is not a taunt' || config.snake.taunt.move
     };
 
     return res.json(data);
@@ -379,6 +376,5 @@ router.post(config.routes.end, function (req, res) {
   res.end();
   return;
 });
-
 
 module.exports = router;
