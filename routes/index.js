@@ -284,48 +284,58 @@ function fearOtherSnakeHeads(stats) {
   return (distance <= radius) ? -1000 * (radius - distance) : 0;
 }
 
-// Get the state of the snake
-router.get(config.routes.state, function (req, res) {
-  // Do something here to calculate the returned state
-
+// Handle GET request to '/'
+router.get(config.routes.info, function (req, res) {
   // Response data
   var data = {
-    name: config.snake.name,
     color: config.snake.color,
+<<<<<<< HEAD
     head: config.snake.head_url,
     taunt: config.snake.taunt.state,
     state: "alive",
     coords: [[0, 0], [0, 1], [0, 2], [1, 2]],
     score: 4
+=======
+    head_url: config.snake.head_url,
+>>>>>>> 78b37d1fda69b09c52a714e8282f97b8b949e3c7
   };
 
   return res.json(data);
 });
 
-// Start
+// Handle POST request to '/start'
 router.post(config.routes.start, function (req, res) {
+<<<<<<< HEAD
+=======
+  // Do something here to start the game
+>>>>>>> 78b37d1fda69b09c52a714e8282f97b8b949e3c7
 
   // Response data
   var data = {
-    name: config.snake.name,
-    color: config.snake.color,
-    head_url: config.snake.head_url,
     taunt: config.snake.taunt.start
   };
 
   return res.json(data);
 });
 
-// Move
+// Handle POST request to '/move'
 router.post(config.routes.move, function (req, res) {
   // Do something here to generate your move
   try {
 
+<<<<<<< HEAD
     var snake = findMySnake(req.body),
       head = _.head(snake.coords),
       hungry = snake.health < 70,
       validMoves = findValidMoves(generateBoard(req.body), head),
       board = generateBoard(req.body);
+=======
+  // Response data
+  var data = {
+    move: 'north', // one of: ["north", "east", "south", "west"]
+    taunt: config.snake.taunt.move
+  };
+>>>>>>> 78b37d1fda69b09c52a714e8282f97b8b949e3c7
 
     var makeMove;
 
@@ -369,7 +379,7 @@ router.post(config.routes.move, function (req, res) {
   }
 });
 
-// End the session
+// Handle POST request to '/end'
 router.post(config.routes.end, function (req, res) {
   // Do something here to end your snake's session
 
