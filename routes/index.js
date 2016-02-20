@@ -348,6 +348,7 @@ router.post(config.routes.move, function (req, res) {
 
     console.log();
     console.log('health: ' + snake.health);
+    console.log('id' + snakeId);
     console.log();
 
     var t = 'north';
